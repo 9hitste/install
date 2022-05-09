@@ -9,7 +9,7 @@ curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- options
 | --- | --- |
 | --install-dir | Where to download and extract the 9Hits App, default is $HOME |
 | --mode | `exchange`, `bot` or `profile` (default is `exchange`) |
-| --token | Your 9Hits token |
+| --token | Your [9Hits token](https://panel.9hits.com/user/profile) |
 | --note | Note for the computer that install the 9Hits App, useful on the remote page |
 | --allow-popups | `yes` or `no` |
 | --allow-adult | `yes` or `no` |

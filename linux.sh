@@ -1,7 +1,7 @@
 #!/bin/bash
 
 dist="unknown"
-url="..."
+url="http://dl.9hits.com/9hitsv3-linux64.tar.bz2"
 
 
 ARGS=$@

@@ -26,7 +26,7 @@ curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- options
 | --auto-start | Auto start on startup |
 | --hide-browser | Hide browser |
 | --clear-all-sessions | Clear all created session (if exists from previous install) |
-| --no-cronjob | Does not create cronjob to start the viewer |
+| --no-cronjob | If your linux vps already has a GUI installed and you can remote desktop to it, just remote to it, open the terminal and add this option and the script will just run the application instead of creating a cronjob |
 # Examples
 - Run 1 system session:
 ```

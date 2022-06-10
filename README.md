@@ -18,6 +18,8 @@ curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- options
 | --system-session | Create the system session (that use the real IP of the machine) |
 | --ex-proxy-sessions | Number of the sessions that use external proxy |
 | --ex-proxy-url | The proxy pool url, leave empty to use 9hits proxy (not recommended) |
+| --bulk-add-proxy-list | The proxy list use to create sessions in bulk |
+| --bulk-add-proxy-type | Type of the proxy list that use to create sessions, possible value: `http`, `socks4`, `socks5`, `ssh`  |
 | --session-note | Note for the created sessions |
 | --ssh-connector | `putty` or `ssh2` (`putty` is recommended) |
 | --cache-dir | Override the default cache dir |
@@ -32,12 +34,16 @@ curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- options
 ```
 curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --allow-crypto=no
 ```
-- Run 1 system session + 10 session use 9hits pool:
+- Run 1 system session + 10 sessions use 9hits pool:
 ```
 curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --ex-proxy-sessions=10 --allow-crypto=no --session-note=9hits-pool --note=my-laptop --hide-browser
 
 ```
-- Run 1 system session + 10 session use your own pool
+- Run 1 system session + 10 sessions use your own pool
 ```
 curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --ex-proxy-sessions=10 --ex-proxy-url=http://my_pool_url/ --allow-crypto=no --session-note=http-pool --note=my-vps --hide-browser
+```
+- Run 1 system session + 2 sessions use the bulk add option
+```
+curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --bulk-add-proxy-type=ssh --bulk-add-proxy-list="12.24.45.56;user;pass|my-ssh.com;admin;12345" --allow-crypto=no --session-note=http-pool --note=my-vps --hide-browser
 ```

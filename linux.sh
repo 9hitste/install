@@ -19,6 +19,8 @@ ALLOW_CRYPTO="yes"
 SESSION_NOTE=""
 EX_PROXY_SESSIONS=""
 EX_PROXY_URL=""
+BULK_PROXY_TYPE=""
+BULK_PROXY_LIST=""
 NO_CRONJOB="no"
 SCHEDULE_RESET=""
 CREATE_SWAP=""
@@ -89,6 +91,14 @@ function parse_args() {
 		  ;;
 		--ex-proxy-url=*)
 		  EX_PROXY_URL="${i#*=}"
+		  shift # past argument=value
+		  ;;
+		--bulk-add-proxy-type=*)
+		  BULK_PROXY_TYPE="${i#*=}"
+		  shift # past argument=value
+		  ;;
+		--bulk-add-proxy-list=*)
+		  BULK_PROXY_LIST="${i#*=}"
 		  shift # past argument=value
 		  ;;
 		--session-note=*)
@@ -188,6 +198,12 @@ function install_9hits() {
 		fi
 		if [ "$EX_PROXY_URL" != "" ]; then
 			NH_ARGS+=" --ex-proxy-url=$EX_PROXY_URL"
+		fi
+		if [ "$BULK_PROXY_TYPE" != "" ]; then
+			NH_ARGS+=" --bulk-add-proxy-type=$BULK_PROXY_TYPE"
+		fi
+		if [ "$BULK_PROXY_LIST" != "" ]; then
+			NH_ARGS+=" --bulk-add-proxy-list=$BULK_PROXY_LIST"
 		fi
 		if [ "$CACHE_DIR" != "" ]; then
 			NH_ARGS+=" --cache-path=$CACHE_DIR"

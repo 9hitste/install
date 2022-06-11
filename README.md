@@ -30,20 +30,21 @@ curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- options
 | --clear-all-sessions | Clear all created session (if exists from previous install) |
 | --no-cronjob | If your linux vps already has a GUI installed and you can remote desktop to it, just remote to it, open the terminal and add this option and the script will just run the application instead of creating a cronjob |
 # Examples
+All examples below are default to create 10G [SWAP](https://opensource.com/article/18/9/swap-space-linux-systems), this is recommended if your computer uses an SSD and has limited RAM, you can remove it if you don't need it.
 - Run 1 system session:
 ```
-curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --allow-crypto=no
+curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --allow-crypto=no --create-swap=10G
 ```
 - Run 1 system session + 10 sessions use 9hits pool:
 ```
-curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --ex-proxy-sessions=10 --allow-crypto=no --session-note=9hits-pool --note=my-laptop --hide-browser
+curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --ex-proxy-sessions=10 --allow-crypto=no --session-note=9hits-pool --note=my-laptop --hide-browser --create-swap=10G
 
 ```
 - Run 1 system session + 10 sessions use your own pool
 ```
-curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --ex-proxy-sessions=10 --ex-proxy-url=http://my_pool_url/ --allow-crypto=no --session-note=http-pool --note=my-vps --hide-browser
+curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --ex-proxy-sessions=10 --ex-proxy-url=http://my_pool_url/ --allow-crypto=no --session-note=http-pool --note=my-vps --hide-browser --create-swap=10G
 ```
 - Run 1 system session + 2 sessions use the bulk add option, the value of --bulk-add-proxy-list should be wrapped by double quotes ""
 ```
-curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --bulk-add-proxy-type=ssh --bulk-add-proxy-list="12.24.45.56;user;pass|my-ssh.com;admin;12345" --allow-crypto=no --session-note=http-pool --note=my-vps --hide-browser
+curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --bulk-add-proxy-type=ssh --bulk-add-proxy-list="12.24.45.56;user;pass|my-ssh.com;admin;12345" --allow-crypto=no --session-note=my-ssh --note=my-vps --hide-browser --create-swap=10G
 ```

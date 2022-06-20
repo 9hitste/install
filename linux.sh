@@ -160,7 +160,7 @@ function install_9hits() {
 	
 	echo "Downloading the 9Hits App..."
 	wget -O "$INSTALL_DIR/_9hits.tar.bz2" $url
-	tar -xjvf "$INSTALL_DIR/_9hits.tar.bz"2 -C "$INSTALL_DIR"
+	tar -xjvf "$INSTALL_DIR/_9hits.tar.bz2" -C "$INSTALL_DIR"
 	
 	chmod -R 777 "$INSTALL_DIR/9hitsv3-linux64/"
 	chmod +x "$INSTALL_DIR/9hitsv3-linux64/9hits"

@@ -1,10 +1,8 @@
 #!/bin/bash
-
-dist="unknown"
-url="http://dl.9hits.com/9hitsv3-linux64.tar.bz2"
-
-
 ARGS=$@
+dist="unknown"
+
+DOWNLOAD_URL="http://dl.9hits.com/9hitsv3-linux64.tar.bz2"
 CURRENT_HASH=$(date +%s)
 TOKEN=""
 NOTE=""
@@ -117,6 +115,10 @@ function parse_args() {
 		  CREATE_SWAP="${i#*=}"
 		  shift # past argument=value
 		  ;;
+		--download-url=*)
+		  DOWNLOAD_URL="${i#*=}"
+		  shift # past argument=value
+		  ;;
 		--cache-del=*)
 		  CACHE_DEL="${i#*=}"
 		  shift # past argument=value
@@ -159,7 +161,7 @@ function install_9hits() {
 	rm -rf ~/.cache/9hits-app/
 	
 	echo "Downloading the 9Hits App..."
-	wget -O "$INSTALL_DIR/_9hits.tar.bz2" $url
+	wget -O "$INSTALL_DIR/_9hits.tar.bz2" $DOWNLOAD_URL
 	tar -xjvf "$INSTALL_DIR/_9hits.tar.bz2" -C "$INSTALL_DIR"
 	
 	chmod -R 777 "$INSTALL_DIR/9hitsv3-linux64/"

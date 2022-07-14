@@ -9,6 +9,7 @@ curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- options
 | Option | Description |
 | --- | --- |
 | --install-dir | Where to download and extract the 9Hits App, default is $HOME |
+| --download-url | override the default download URL, useful when you want to download a pre-configured 9Hits App|
 | --mode | `exchange`, `bot` or `profile` (default is `exchange`) |
 | --token | Your [9Hits token](https://panel.9hits.com/user/profile) |
 | --note | Note for the computer that install the 9Hits App, useful on the remote page |
@@ -31,6 +32,10 @@ curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- options
 | --no-cronjob | If your linux vps already has a GUI installed and you can remote desktop to it, just remote to it, open the terminal and add this option and the script will just run the application instead of creating a cronjob |
 # Examples
 All examples below are default to create 10G [SWAP](https://opensource.com/article/18/9/swap-space-linux-systems), this is recommended if your computer uses an SSD and has limited RAM, you can remove it if you don't need it.
+- Just start the app with your token, you can then go to the [Remote Page](https://panel.9hits.com/app/remote) to continue the configuration
+```
+curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123
+```
 - Run 1 system session:
 ```
 curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --allow-crypto=no --create-swap=10G

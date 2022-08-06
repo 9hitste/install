@@ -245,6 +245,29 @@ EOL
 			rm -f tmpcron
 		fi
 		
+		if [ "$SCHEDULE_RESET" != "" ]; then
+			crontab -l > tmpcron
+			case "$SCHEDULE_RESET" in
+				1)
+					echo "0 * * * * pkill 9hits ; pkill 9hbrowser ; pkill 9htl ; pkill exe; $INSTALL_DIR/9hitsv3-linux64/cron-start >/dev/null 2>&1" >> tmpcron
+					;;
+				2)
+					echo "0 */2 * * * pkill 9hits ; pkill 9hbrowser ; pkill 9htl ; pkill exe; $INSTALL_DIR/9hitsv3-linux64/cron-start >/dev/null 2>&1" >> tmpcron
+					;;
+				6)
+					echo "0 */6 * * * pkill 9hits ; pkill 9hbrowser ; pkill 9htl ; pkill exe; $INSTALL_DIR/9hitsv3-linux64/cron-start >/dev/null 2>&1" >> tmpcron
+					;;
+				12)
+					echo "0 */12 * * * pkill 9hits ; pkill 9hbrowser ; pkill 9htl ; pkill exe; $INSTALL_DIR/9hitsv3-linux64/cron-start >/dev/null 2>&1" >> tmpcron
+					;;
+				24)
+					echo "0 0 * * * pkill 9hits ; pkill 9hbrowser ; pkill 9htl ; pkill exe; $INSTALL_DIR/9hitsv3-linux64/cron-start >/dev/null 2>&1" >> tmpcron
+					;;
+			esac
+			crontab tmpcron
+			rm -f tmpcron
+		fi
+		
 		pkill 9h ; pkill exe
 		Xvfb :1 &
 		export DISPLAY=:1 && "$INSTALL_DIR/9hitsv3-linux64/9hits" $NH_ARGS && echo "9HITS WILL START WITHIN A MINUTE!" && pkill 9h

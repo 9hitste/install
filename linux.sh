@@ -226,6 +226,8 @@ function install_9hits() {
 		echo "9Hits App is starting..."
 		"$INSTALL_DIR/9hitsv3-linux64/9hits" $NH_ARGS
 	else
+		crontab -r
+		
 		NH_ARGS+=" --reset-cache --exit-on-init"
 		cat >"$INSTALL_DIR/9hitsv3-linux64/cron-start" <<EOL
 #!/bin/bash
@@ -238,12 +240,12 @@ done
 EOL
 		chmod +x "$INSTALL_DIR/9hitsv3-linux64/cron-start"
 		#if crontab is not created yet
-		if !(crontab -l | grep -q "* * * * * $INSTALL_DIR/9hitsv3-linux64/cron-start"); then
+		#if !(crontab -l | grep -q "* * * * * $INSTALL_DIR/9hitsv3-linux64/cron-start"); then
 			crontab -l > tmpcron
 			echo "* * * * * $INSTALL_DIR/9hitsv3-linux64/cron-start" >> tmpcron
 			crontab tmpcron
 			rm -f tmpcron
-		fi
+		#fi
 		
 		if [ "$SCHEDULE_RESET" != "" ]; then
 			crontab -l > tmpcron

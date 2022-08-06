@@ -28,6 +28,7 @@ curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- options
 | --cache-del | `0`: no cache, `-1`: never delete cache, `100-200-500-1000`: clear cache after corresponding number of views |
 | --auto-start | Auto start on startup |
 | --hide-browser | Hide browser |
+| --schedule-reset | Restart the 9Hits App periodically, possible values: `1` - Hourly, `2` - every 2 hours, `6` - every 6 hours, `12` - every 12 hours, `24` - every day. |
 | --clear-all-sessions | Clear all created session (if exists from previous install) |
 | --no-cronjob | If your linux vps already has a GUI installed and you can remote desktop to it, just remote to it, open the terminal and add this option and the script will just run the application instead of creating a cronjob |
 # Examples

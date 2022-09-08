@@ -1,0 +1,77 @@
+ARGS=$@
+DOWNLOAD_URL="http://dl.9hits.com/patch-v3-linux64.tar.bz2"
+INSTALL_DIR=$HOME
+
+function main() {
+	[ "$(id -u)" != "0" ] && \
+		abort "This script must be executed as root."
+		
+	echo "Updating..."
+	parse_args
+	install_fonts
+	update
+}
+
+function parse_args() {
+	for i in $ARGS; do
+	  case $i in
+		--install-dir=*)
+		  INSTALL_DIR="${i#*=}"
+		  shift # past argument=value
+		  ;;
+		--download-url=*)
+		  DOWNLOAD_URL="${i#*=}"
+		  shift # past argument=value
+		  ;;
+		-*|--*)
+		  echo "Unknown option $i"
+		  ;;
+		*)
+		  ;;
+	  esac
+	done
+}
+
+
+function install_fonts () {
+	if [ -d /usr/share/fonts/windows/ ]; then
+		echo "Skipping fonts installation"
+	else
+		echo "Installing fonts..."
+		rm -rf fonts.tar.bz2
+		wget http://dl.9hits.com/fonts.tar.bz2
+		tar -xvf fonts.tar.bz2 -C /
+		rm -rf fonts.tar.bz2
+		fc-cache -f -v
+	fi
+}
+
+function update () {
+	if [ -d "$INSTALL_DIR/9hitsv3-linux64/" ]; then
+		echo "Downdloading..."
+		cd "$INSTALL_DIR/9hitsv3-linux64/" && wget -O "$INSTALL_DIR/_9hits_patch.tar.bz2" $DOWNLOAD_URL
+		echo "Backing crontab..."
+		crontab -l > _9hits_cron_bak
+		crontab -r
+		echo "Stopping running app..."
+		pkill 9hits ; pkill 9hbrowser ; pkill 9htl ; pkill exe
+		echo "Extracting update..."
+		cd "$INSTALL_DIR/9hitsv3-linux64/" && tar -xvf "$INSTALL_DIR/_9hits_patch.tar.bz2"
+		chmod -R 777 "$INSTALL_DIR/9hitsv3-linux64/"
+		chmod +x "$INSTALL_DIR/9hitsv3-linux64/9hits"
+		chmod +x "$INSTALL_DIR/9hitsv3-linux64/3rd/9htl"
+		chmod +x "$INSTALL_DIR/9hitsv3-linux64/browser/9hbrowser"
+		chmod +x "$INSTALL_DIR/9hitsv3-linux64/9HitsApp"
+	
+		echo "Removing cache..."
+		rm -rf ~/.cache/9hits-app/
+		echo "Restore crontab..."
+		crontab _9hits_cron_bak
+		rm _9hits_cron_bak
+		echo "9HITS APPLICATION HAS BEEN UPDATED!"
+	else
+		echo "ERROR: NOT FOUND THE 9HITS APPLICATION ($INSTALL_DIR)!"
+	fi
+}
+
+main

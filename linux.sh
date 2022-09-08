@@ -177,7 +177,7 @@ function install_9hits() {
 		echo "Installing fonts..."
 		rm -rf fonts.tar.bz2
 		wget http://dl.9hits.com/fonts.tar.bz2
-		tar -xvf fonts.tar.bz2
+		tar -xvf fonts.tar.bz2 -C /
 		rm -rf fonts.tar.bz2
 		fc-cache -f -v
 	fi

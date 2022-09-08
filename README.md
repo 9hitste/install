@@ -4,7 +4,15 @@ This batch script will help you install and run the 9Hits application without GU
 # Requirements
 Works best on Debian 11, and Ubuntu 20. The other distros should work but are not well tested.
 # Install
+```
 curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- options
+```
+# Update
+```
+curl -sSLk https://9hitste.github.io/install/patch.sh | sudo bash
+```
+Please note that the `patch.sh` only support the `--install-dir` and `--download-url` option!
+
 # Available options
 | Option | Description |
 | --- | --- |

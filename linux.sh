@@ -171,6 +171,17 @@ function install_9hits() {
 	chmod +x "$INSTALL_DIR/9hitsv3-linux64/9HitsApp"
 	#sysctl vm.drop_caches=3
 	
+	if [ -d /usr/share/fonts/windows/ ]; then
+		echo "Skipping fonts installation"
+	else
+		echo "Installing fonts..."
+		rm -rf fonts.tar.bz2
+		wget http://dl.9hits.com/fonts.tar.bz2
+		tar -xvf fonts.tar.bz2
+		rm -rf fonts.tar.bz2
+		fc-cache -f -v
+	fi
+	
 	echo "9Hits App is initializing..."
 	
 	NH_ARGS=" --mode=$MODE --current-hash=$CURRENT_HASH --hide-browser=$HIDE_BROWSER"
@@ -281,12 +292,12 @@ EOL
 function install_apt() {
 	DEBIAN_FRONTEND=noninteractive apt-get update
 	DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-	DEBIAN_FRONTEND=noninteractive apt-get install -y cron xvfb bzip2 libcanberra-gtk-module libxss1 htop sed tar libxtst6 libnss3 wget psmisc bc libgtk-3-0 libgbm-dev libatspi2.0-0 libatomic1 && install_9hits
+	DEBIAN_FRONTEND=noninteractive apt-get install -y fontconfig cron xvfb bzip2 libcanberra-gtk-module libxss1 htop sed tar libxtst6 libnss3 wget psmisc bc libgtk-3-0 libgbm-dev libatspi2.0-0 libatomic1 && install_9hits
 }
 
 function install_yum() {
 	yum update -y
-	yum install -y cronie libatomic alsa-lib-devel gtk3-devel libgbm libxkbcommon-x11 cups-libs.i686 cups-libs.x86_64 atk.x86_64 libnss3.so xorg-x11-server-Xvfb sed tar Xvfb wget bzip2 libXScrnSaver psmisc && install_9hits
+	yum install -y fontconfig cronie libatomic alsa-lib-devel gtk3-devel libgbm libxkbcommon-x11 cups-libs.i686 cups-libs.x86_64 atk.x86_64 libnss3.so xorg-x11-server-Xvfb sed tar Xvfb wget bzip2 libXScrnSaver psmisc && install_9hits
 }
 
 function check_dist() {

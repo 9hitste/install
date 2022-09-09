@@ -48,14 +48,15 @@ function install_fonts () {
 
 function update () {
 	if [ -d "$INSTALL_DIR/9hitsv3-linux64/" ]; then
-		echo "Downdloading..."
-		cd "$INSTALL_DIR/9hitsv3-linux64/" && wget -O "$INSTALL_DIR/_9hits_patch.tar.bz2" $DOWNLOAD_URL
-		echo "Backing crontab..."
+		echo "Backing up crontab..."
 		crontab -l > _9hits_cron_bak
 		crontab -r
 		echo "Stopping running app..."
 		pkill 9hits ; pkill 9hbrowser ; pkill 9htl ; pkill exe
+		echo "Downdloading..."
+		cd "$INSTALL_DIR/9hitsv3-linux64/" && wget -O "$INSTALL_DIR/_9hits_patch.tar.bz2" $DOWNLOAD_URL
 		echo "Extracting update..."
+		pkill 9hits ; pkill 9hbrowser ; pkill 9htl ; pkill exe
 		cd "$INSTALL_DIR/9hitsv3-linux64/" && tar -xvf "$INSTALL_DIR/_9hits_patch.tar.bz2"
 		chmod -R 777 "$INSTALL_DIR/9hitsv3-linux64/"
 		chmod +x "$INSTALL_DIR/9hitsv3-linux64/9hits"
@@ -65,7 +66,7 @@ function update () {
 	
 		echo "Removing cache..."
 		rm -rf ~/.cache/9hits-app/
-		echo "Restore crontab..."
+		echo "Restoring crontab..."
 		crontab _9hits_cron_bak
 		rm _9hits_cron_bak
 		echo "9HITS APPLICATION HAS BEEN UPDATED!"

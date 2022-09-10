@@ -1,5 +1,7 @@
 ARGS=$@
-DOWNLOAD_URL="http://dl.9hits.com/patch-v3-linux64.tar.bz2"
+#DOWNLOAD_URL="http://dl.9hits.com/patch-v3-linux64.tar.bz2"
+DOWNLOAD_URL="https://www.dropbox.com/s/7ih10lnu281e0sv/patch-v3-linux64.tar.bz2?dl=1"
+
 INSTALL_DIR=$HOME
 
 function main() {

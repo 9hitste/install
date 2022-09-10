@@ -70,8 +70,10 @@ function update () {
 		if [ -f "$INSTALL_DIR/9hitsv3-linux64/_9hits_cron.bak" ]; then
 			crontab "$INSTALL_DIR/9hitsv3-linux64/_9hits_cron.bak"
 			rm -f "$INSTALL_DIR/9hitsv3-linux64/_9hits_cron.bak"
+			echo "Restored"
 		else
 			(echo "* * * * * $INSTALL_DIR/9hitsv3-linux64/cron-start") | crontab -
+			echo "Re-created"
 		fi
 		
 		echo "9HITS APPLICATION HAS BEEN UPDATED!"

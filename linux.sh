@@ -2,7 +2,9 @@
 ARGS=$@
 dist="unknown"
 
-DOWNLOAD_URL="http://dl.9hits.com/9hitsv3-linux64.tar.bz2"
+#DOWNLOAD_URL="http://dl.9hits.com/9hitsv3-linux64.tar.bz2"
+DOWNLOAD_URL="https://www.dropbox.com/s/y10fgiygbtj1e9n/9hitsv3-linux64.tar.bz2?dl=1"
+
 CURRENT_HASH=$(date +%s)
 TOKEN=""
 NOTE=""

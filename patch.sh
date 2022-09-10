@@ -71,7 +71,8 @@ function update () {
 			crontab "$INSTALL_DIR/9hitsv3-linux64/_9hits_cron.bak"
 			rm -f "$INSTALL_DIR/9hitsv3-linux64/_9hits_cron.bak"
 			echo "Restored"
-		else
+		fi
+		if !(crontab -l | grep -q "* * * * * $INSTALL_DIR/9hitsv3-linux64/cron-start"); then
 			(echo "* * * * * $INSTALL_DIR/9hitsv3-linux64/cron-start") | crontab -
 			echo "Re-created"
 		fi

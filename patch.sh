@@ -49,7 +49,7 @@ function install_fonts () {
 function update () {
 	if [ -d "$INSTALL_DIR/9hitsv3-linux64/" ]; then
 		echo "Backing up crontab..."
-		crontab -l > "$INSTALL_DIR/_9hits_cron.bak" && crontab -r
+		crontab -l > "$INSTALL_DIR/9hitsv3-linux64/_9hits_cron.bak" && crontab -r
 		echo "Stopping running app..."
 		pkill 9hits ; pkill 9hbrowser ; pkill 9htl ; pkill exe
 		echo "Downdloading..."
@@ -67,12 +67,13 @@ function update () {
 		echo "Removing cache..."
 		rm -rf ~/.cache/9hits-app/
 		echo "Restoring crontab..."
-		if [ -f "$INSTALL_DIR/_9hits_cron.bak" ]; then
-			crontab "$INSTALL_DIR/_9hits_cron.bak"
-			rm -f "$INSTALL_DIR/_9hits_cron.bak"
+		if [ -f "$INSTALL_DIR/9hitsv3-linux64/_9hits_cron.bak" ]; then
+			crontab "$INSTALL_DIR/9hitsv3-linux64/_9hits_cron.bak"
+			rm -f "$INSTALL_DIR/9hitsv3-linux64/_9hits_cron.bak"
 		else
 			(echo "* * * * * $INSTALL_DIR/9hitsv3-linux64/cron-start") | crontab -
 		fi
+		
 		echo "9HITS APPLICATION HAS BEEN UPDATED!"
 	else
 		echo "ERROR: NOT FOUND THE 9HITS APPLICATION ($INSTALL_DIR)!"

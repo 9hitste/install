@@ -223,7 +223,6 @@ while [[ ! \$(pidof 9hits) ]]; do
 	exit
 done
 EOL
-		echo "INSTALL_DIR: $INSTALL_DIR"
 		chmod +x "$INSTALL_DIR/9hitsv3-linux64/cron-start"
 		echo "* * * * * $INSTALL_DIR/9hitsv3-linux64/cron-start" | crontab -
 		

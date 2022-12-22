@@ -3,7 +3,7 @@ ARGS=$@
 _9HITSUSER="_9hits"
 
 #DOWNLOAD_URL="http://dl.9hits.com/9hitsv3-linux64.tar.bz2"
-DOWNLOAD_URL="https://www.dropbox.com/s/y10fgiygbtj1e9n/9hitsv3-linux64.tar.bz2?dl=1"
+DOWNLOAD_URL="https://www.dropbox.com/s/cz55sha9aj609ra/9hitsv3-linux64.tar.bz2?dl=1"
 
 CURRENT_HASH=$(date +%s)
 TOKEN=""

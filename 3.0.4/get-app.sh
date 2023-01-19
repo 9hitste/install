@@ -220,7 +220,7 @@ function install_9hits() {
 while [[ ! \$(pidof 9hits) ]]; do
 	killall 9hits 9hbrowser 9htl exe
 	Xvfb :1 &
-	export DISPLAY=:1 && $INSTALL_DIR/9hitsv3-linux64/9hits --auto-start --single-process --no-sandbox --no-zygote --disable-logging > /dev/null
+	export DISPLAY=:1 && $INSTALL_DIR/9hitsv3-linux64/9hits --auto-start --single-process --no-sandbox --no-zygote --disable-logging --enable-low-end-device-mode --disable-threaded-compositing > /dev/null
 	exit
 done
 EOL

@@ -5,7 +5,7 @@ This batch script will help you install and run the 9Hits application without GU
 Works best on Debian 11, and Ubuntu 20. The other distros should work but are not well tested.
 # Install
 ```
-curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- options
+curl -sSLk https://9hitste.github.io/install/3.0.4/linux.sh | sudo bash -s -- options
 ```
 # Update
 ```
@@ -43,22 +43,22 @@ Please note that the `patch.sh` only support the `--install-dir` and `--download
 All examples below are default to create 10G [SWAP](https://opensource.com/article/18/9/swap-space-linux-systems), this is recommended if your computer uses an SSD and has limited RAM, you can remove it if you don't need it.
 - Just start the app with your token, you can then go to the [Remote Page](https://panel.9hits.com/app/remote) to continue the configuration
 ```
-curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123
+curl -sSLk https://9hitste.github.io/install/3.0.4/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123
 ```
 - Run 1 system session:
 ```
-curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --allow-crypto=no --create-swap=10G
+curl -sSLk https://9hitste.github.io/install/3.0.4/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --allow-crypto=no --create-swap=10G
 ```
 - Run 1 system session + 10 sessions use 9hits pool:
 ```
-curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --ex-proxy-sessions=10 --allow-crypto=no --session-note=9hits-pool --note=my-laptop --hide-browser --create-swap=10G
+curl -sSLk https://9hitste.github.io/install/3.0.4/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --ex-proxy-sessions=10 --allow-crypto=no --session-note=9hits-pool --note=my-laptop --hide-browser --create-swap=10G
 
 ```
 - Run 1 system session + 10 sessions use your own pool
 ```
-curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --ex-proxy-sessions=10 --ex-proxy-url=http://my_pool_url/ --allow-crypto=no --session-note=http-pool --note=my-vps --hide-browser --create-swap=10G
+curl -sSLk https://9hitste.github.io/install/3.0.4/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --ex-proxy-sessions=10 --ex-proxy-url=http://my_pool_url/ --allow-crypto=no --session-note=http-pool --note=my-vps --hide-browser --create-swap=10G
 ```
 - Run 1 system session + 2 sessions use the bulk add option, the value of --bulk-add-proxy-list should be wrapped by double quotes ""
 ```
-curl -sSLk https://9hitste.github.io/install/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --bulk-add-proxy-type=ssh --bulk-add-proxy-list="12.24.45.56;user;pass|my-ssh.com;admin;12345" --allow-crypto=no --session-note=my-ssh --note=my-vps --hide-browser --create-swap=10G
+curl -sSLk https://9hitste.github.io/install/3.0.4/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123 --system-session --bulk-add-proxy-type=ssh --bulk-add-proxy-list="12.24.45.56;user;pass|my-ssh.com;admin;12345" --allow-crypto=no --session-note=my-ssh --note=my-vps --hide-browser --create-swap=10G
 ```

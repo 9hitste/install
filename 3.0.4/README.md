@@ -1,6 +1,6 @@
 # About
 This batch script will help you install and run the 9Hits application without GUI to start earning points, any patchs are welcome :)
-![9Hits App](/9happv3.png)
+![9Hits App](./9happv3.png)
 # Requirements
 Works best on Debian 11, and Ubuntu 20. The other distros should work but are not well tested.
 # Install

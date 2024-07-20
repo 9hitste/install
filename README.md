@@ -38,7 +38,7 @@ curl -sSLk https://9hitste.github.io/install/5.0.0/linux.sh | sudo bash -s -- op
 All examples below are default to create 10G [SWAP](https://opensource.com/article/18/9/swap-space-linux-systems), this is recommended if your computer uses an SSD and has limited RAM, you can remove it if you don't need it.
 - Just start the app with your token, you can then go to the [Remote Page](https://panel.9hits.com/app/remote) to continue the configuration
 ```
-curl -sSLk https://9hitste.github.io/install/3.0.4/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123
+curl -sSLk https://9hitste.github.io/install/5.0.0/linux.sh | sudo bash -s -- --token=186eaced825ab3e3468dfda97d880123
 ```
 
 - Run 1 system session:

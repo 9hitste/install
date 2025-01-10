@@ -1,5 +1,5 @@
 #!/bin/bash
-DEFAULT_DOWNLOAD="http://mirror-dl.9hits.com/3.0.4/9hitsv3-linux64.tar.bz2"
+DEFAULT_DOWNLOAD="https://www.dropbox.com/scl/fi/lxh27obvakysm4es1s8vx/9hitsv3-linux64.tar.bz2?rlkey=q465n3fevlkt3sjbfwo9dhozp&st=ft3vh585&dl=1"
 _9HITSUSER="_9hits"
 
 set -- --default-dl=$DEFAULT_DOWNLOAD $@

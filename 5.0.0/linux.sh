@@ -1,5 +1,5 @@
 #!/bin/bash
-DEFAULT_DOWNLOAD="https://www.dropbox.com/scl/fi/sir2tonb67weulvba0ro7/9hitsv5-linux64.tar.bz2?rlkey=239aovy2rlvxgn1d8dy8myfxc&st=w1qraxjb&dl=1"
+DEFAULT_DOWNLOAD="https://www.dropbox.com/scl/fi/gubhcdjtmh7ryqnpz08br/9hitsv5-linux64.tar.bz2?rlkey=5z7pa756m1jncxoewivsej72l&st=03crzvsr&dl=1"
 _9HITSUSER="_9hits"
 
 set -- --default-dl=$DEFAULT_DOWNLOAD $@

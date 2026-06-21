@@ -2,7 +2,7 @@
 # 9Hits Viewer v6 - Linux installer & auto-restart runner
 # Usage: bash install.sh --access-key=<32hex> [options]
 
-DEFAULT_DOWNLOAD="https://www.dropbox.com/scl/fi/j0ewrcnoum69pe7lolua3/9hitsv6-linux64.tar.bz2?rlkey=dk5phszdviuictwewv2hrtqu8&st=p1zs4sdu&dl=1"
+DEFAULT_DOWNLOAD="https://dl.9hits.com/9hitsv6-linux64.tar.bz2"
 
 # --- Defaults ---
 INSTALL_DIR="$HOME/9hits"
@@ -348,7 +348,7 @@ while true; do
   # Run nhviewer in the FOREGROUND: its dashboard requires a controlling TTY and
   # exits immediately if backgrounded with '&'. 'timeout' provides the periodic
   # 24h restart (sends SIGTERM, exit code 124) without backgrounding.
-  timeout \$PERIODIC_RESTART $INSTALL_DIR/nhviewer --auto-start
+  timeout \$PERIODIC_RESTART $INSTALL_DIR/nhviewer --auto-start --in-loop
 
   echo "[\$(date '+%Y-%m-%d %H:%M:%S')] nhviewer exited - restarting in \${RESTART_DELAY}s..."
   sleep \$RESTART_DELAY

@@ -348,7 +348,7 @@ while true; do
   # Run nhviewer in the FOREGROUND: its dashboard requires a controlling TTY and
   # exits immediately if backgrounded with '&'. 'timeout' provides the periodic
   # 24h restart (sends SIGTERM, exit code 124) without backgrounding.
-  timeout \$PERIODIC_RESTART $INSTALL_DIR/nhviewer --auto-start --in-loop
+  timeout \$PERIODIC_RESTART $INSTALL_DIR/nhviewer --auto-start --in-loop --render-to-terminal
 
   echo "[\$(date '+%Y-%m-%d %H:%M:%S')] nhviewer exited - restarting in \${RESTART_DELAY}s..."
   sleep \$RESTART_DELAY

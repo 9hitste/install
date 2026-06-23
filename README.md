@@ -36,7 +36,8 @@ curl -sSLk https://9hitste.github.io/install/v6/install.sh | sudo bash -s -- --i
 | --install-dir | Where to download and extract the 9Hits Viewer, default is `$HOME/9hits` |
 | --install-deps | Install required system dependencies (Xvfb, libnss3, libgtk-3-0, etc.), requires root |
 | --install-vnc | Install x11vnc and start a VNC server mirroring the viewer display, requires root |
-| --vnc-pw | VNC password (recommended). If omitted, VNC will be open with no authentication |
+| --vnc-pw | VNC password. If omitted, a random password is generated and printed to the terminal |
+| --no-vnc-pw | Run VNC with NO password (open). Only use this if you explicitly want an unauthenticated VNC |
 | --vnc-port | VNC port, default `5901` (5900 is avoided as it commonly clashes with other VNC servers) |
 | --default-dl | Override the default download URL for the viewer |
 | --create-swap | Create swap space, e.g. `--create-swap=10G`, requires root |

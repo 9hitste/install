@@ -54,6 +54,7 @@ curl -sSLk https://9hitste.github.io/install/v6/install.sh | sudo bash -s -- --i
 | --cache-path | Override the default browser cache directory |
 | --cache-limit | `-1`: default, `0`: no cache, or a number of bytes to limit disk cache usage, eg: 104857600 (for 100MB = 100 * 1024 * 1024) |
 | --clear-all-sessions | Remove all previously created sessions before applying new configuration |
+| --hide-columns | Comma-separated columns to hide in the viewer table; every other column is forced shown (overrides the saved layout). Columns: `id`, `note`, `proxy`, `client`, `quality`, `hits`, `points` (`status` is always shown). e.g. `--hide-columns=quality,points` |
 
 # Examples
 All examples below default to creating 10G [SWAP](https://opensource.com/article/18/9/swap-space-linux-systems), recommended if your machine uses an SSD and has limited RAM. Remove `--create-swap=10G` if not needed (also remove `sudo`).

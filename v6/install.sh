@@ -10,6 +10,7 @@ RESTART_DELAY=5
 DO_INSTALL_DEPS=0
 DO_INSTALL_VNC=0
 VNC_PW=""
+NO_VNC_PW=0     # 1 (via --no-vnc-pw) = run VNC open; otherwise a random password is generated
 VNC_PORT=5901   # 5901 by default to avoid clashing with VNC servers commonly on 5900
 XVFB_RESOLUTION=""   # empty or "auto" -> pick based on CPU/RAM (min 1920x1080x24)
 CREATE_SWAP=""
@@ -29,6 +30,7 @@ parse_args() {
       --install-deps)    DO_INSTALL_DEPS=1 ;;
       --install-vnc)     DO_INSTALL_VNC=1 ;;
       --vnc-pw=*)        VNC_PW="${arg#*=}" ;;
+      --no-vnc-pw)       NO_VNC_PW=1 ;;
       --vnc-port=*)      VNC_PORT="${arg#*=}" ;;
       --resolution=*)    XVFB_RESOLUTION="${arg#*=}" ;;
       --create-swap=*)   CREATE_SWAP="${arg#*=}" ;;
@@ -245,10 +247,26 @@ install_vnc() {
   echo "x11vnc installed."
 }
 
+# Random 8-char alphanumeric (VNC truncates passwords to 8 chars anyway).
+gen_password() {
+  LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom 2>/dev/null | head -c 8
+}
+
 start_vnc() {
   # Kill any existing x11vnc on the same port
   pkill -f "x11vnc.*:${VNC_PORT}" 2>/dev/null || true
   sleep 0.5
+
+  # No password given: generate a random one unless --no-vnc-pw was passed.
+  if [ -z "$VNC_PW" ] && [ "$NO_VNC_PW" -eq 0 ]; then
+    VNC_PW=$(gen_password)
+    echo ""
+    echo "  ============================================================"
+    echo "   VNC auto-generated password: $VNC_PW"
+    echo "   (set your own with --vnc-pw=<pw>, or open it with --no-vnc-pw)"
+    echo "  ============================================================"
+    echo ""
+  fi
 
   local auth_opts
   if [ -n "$VNC_PW" ]; then
@@ -258,7 +276,7 @@ start_vnc() {
     auth_opts="-rfbauth $HOME/.x11vnc/passwd"
   else
     auth_opts="-nopw"
-    echo "WARNING: VNC started without password. Use --vnc-pw=<password> to secure it." >&2
+    echo "WARNING: VNC started WITHOUT a password (--no-vnc-pw)." >&2
   fi
 
   # shellcheck disable=SC2086
@@ -373,8 +391,10 @@ RUNNER_EOF
     echo "==> VNC is running - connect to view nhviewer live."
     echo "    Address  : ${server_ip:-<server-ip>}:$VNC_PORT"
     echo "    Client   : TigerVNC (https://tigervnc.org) or any VNC client"
-    if [ -z "$VNC_PW" ]; then
-      echo "    Password : none (use --vnc-pw=<password> to secure)"
+    if [ -n "$VNC_PW" ]; then
+      echo "    Password : $VNC_PW"
+    else
+      echo "    Password : none (--no-vnc-pw)"
     fi
     echo "    To restart VNC manually: x11vnc -display $XVFB_DISPLAY -rfbport $VNC_PORT -forever -shared -noxdamage -nopw &"
   fi

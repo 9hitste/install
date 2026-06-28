@@ -1,13 +1,14 @@
 #!/bin/bash
-# 9Hits Viewer v6 - Linux installer & auto-restart runner
-# Usage: bash install.sh --access-key=<32hex> [options]
+# 9Hits Viewer v6 - Linux installer (systemd-supervised)
+# Usage: sudo bash install.sh --access-key=<32hex> [options]
+# Requires systemd + root. For containers/non-systemd hosts use the Docker image.
 
 DEFAULT_DOWNLOAD="https://dl.9hits.com/9hitsv6-linux64.tar.bz2"
 
 # --- Defaults ---
-INSTALL_DIR="$HOME/9hits"
+INSTALL_DIR="/opt/9hits"
 RESTART_DELAY=5
-DO_INSTALL_DEPS=0
+DO_INSTALL_DEPS=1   # install system deps by default; --skip-install-deps to opt out
 DO_INSTALL_VNC=0
 VNC_PW=""
 NO_VNC_PW=0     # 1 (via --no-vnc-pw) = run VNC open; otherwise a random password is generated
@@ -16,6 +17,7 @@ XVFB_RESOLUTION=""   # empty or "auto" -> pick based on CPU/RAM (min 1920x1080x2
 CREATE_SWAP=""
 XVFB_DISPLAY=":99"
 SCREEN_SESSION="9hits"
+RESET_INTERVAL=""   # e.g. 6h/24h/30m -> forwarded to the viewer (--reset-interval), which gracefully self-restarts on that interval; empty = never
 
 # App args forwarded to nhviewer (--exit-on-init / --auto-start are managed by this script)
 APP_ARGS=()
@@ -27,7 +29,9 @@ parse_args() {
   for arg in "$@"; do
     case "$arg" in
       --install-dir=*)   INSTALL_DIR="${arg#*=}" ;;
-      --install-deps)    DO_INSTALL_DEPS=1 ;;
+      --skip-install-deps) DO_INSTALL_DEPS=0 ;;
+      # avoid pass this old flag to the viewer
+      --install-deps) DO_INSTALL_DEPS=1 ;;
       --install-vnc)     DO_INSTALL_VNC=1 ;;
       --vnc-pw=*)        VNC_PW="${arg#*=}" ;;
       --no-vnc-pw)       NO_VNC_PW=1 ;;
@@ -36,6 +40,7 @@ parse_args() {
       --create-swap=*)   CREATE_SWAP="${arg#*=}" ;;
       --restart-delay=*) RESTART_DELAY="${arg#*=}" ;;
       --default-dl=*)    DEFAULT_DOWNLOAD="${arg#*=}" ;;
+      --reset-interval=*) RESET_INTERVAL="${arg#*=}" ;;
       # Script controls these - strip from forwarded args
       --exit-on-init|--auto-start) ;;
       # Everything else goes straight to nhviewer
@@ -45,7 +50,7 @@ parse_args() {
 }
 
 # --------------------------------------------------------------------------
-# System requirements check (Chrome 146 minimums)
+# System requirements check
 # --------------------------------------------------------------------------
 check_system() {
   # Architecture
@@ -69,7 +74,7 @@ check_system() {
   minor=$(echo "$version_id" | cut -d. -f2)
   minor=${minor:-0}
 
-  # Minimums below track the glibc >= 2.31 requirement of Chromium 146.
+  # Minimums below track the glibc >= 2.31
   case "$dist" in
     ubuntu)
       # 20.04 minimum (major > 20, or major == 20 and minor >= 4)
@@ -100,7 +105,7 @@ check_system() {
   esac
 
   if [ "$ok" -ne 1 ]; then
-    echo "ERROR: $dist $version_id is too old for Chromium 146 (needs glibc >= 2.31, minimum: $min_ver)." >&2
+    echo "ERROR: $dist $version_id is too old (needs glibc >= 2.31, minimum: $min_ver)." >&2
     exit 1
   fi
 
@@ -195,33 +200,20 @@ auto_resolution() {
 }
 
 # --------------------------------------------------------------------------
-# Xvfb - disowned so it survives after this script exits
-# --------------------------------------------------------------------------
-start_xvfb() {
-  if xdpyinfo -display "$XVFB_DISPLAY" &>/dev/null; then
-    echo "Display $XVFB_DISPLAY already available, reusing."
-    return
-  fi
-  Xvfb "$XVFB_DISPLAY" -screen 0 "$XVFB_RESOLUTION" -nolisten tcp &
-  disown $!
-  local tries=0
-  until xdpyinfo -display "$XVFB_DISPLAY" &>/dev/null || [ $tries -ge 10 ]; do
-    sleep 0.5; ((tries++))
-  done
-  echo "Xvfb started on display $XVFB_DISPLAY"
-}
-
-# --------------------------------------------------------------------------
 # Kill all viewer/browser processes cleanly before (re)starting
 # --------------------------------------------------------------------------
 kill_viewer() {
-  pkill -TERM -f nhviewer  2>/dev/null || true
-  pkill -TERM -f may  2>/dev/null || true
-  # Renderer / GPU / utility processes share the same binary name; the above
-  # pkill -f catches them all. Give them 2 s to exit gracefully, then SIGKILL.
+  # Match the exact process NAME (comm), not the command line. A bare "pkill -f
+  # may" is dangerously broad — "may" as a substring once matched (and killed)
+  # our own SSH shell. "-x" only hits processes actually named may/nhviewer and
+  # is install-path independent (catches strays from an old INSTALL_DIR too).
+  # systemd's KillMode=control-group is the primary killer; this is the backup
+  # for any stray outside the cgroup.
+  pkill -TERM -x nhviewer 2>/dev/null || true
+  pkill -TERM -x may      2>/dev/null || true
   sleep 2
-  pkill -KILL -f nhviewer  2>/dev/null || true
-  pkill -KILL -f may  2>/dev/null || true
+  pkill -KILL -x nhviewer 2>/dev/null || true
+  pkill -KILL -x may      2>/dev/null || true
 }
 
 # --------------------------------------------------------------------------
@@ -252,12 +244,9 @@ gen_password() {
   LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom 2>/dev/null | head -c 8
 }
 
-start_vnc() {
-  # Kill any existing x11vnc on the same port
-  pkill -f "x11vnc.*:${VNC_PORT}" 2>/dev/null || true
-  sleep 0.5
-
-  # No password given: generate a random one unless --no-vnc-pw was passed.
+# Resolve the VNC password (random unless given, or none with --no-vnc-pw) and
+# write the rfbauth file consumed by the 9hits-vnc systemd unit.
+prepare_vnc_password() {
   if [ -z "$VNC_PW" ] && [ "$NO_VNC_PW" -eq 0 ]; then
     VNC_PW=$(gen_password)
     echo ""
@@ -267,31 +256,164 @@ start_vnc() {
     echo "  ============================================================"
     echo ""
   fi
-
-  local auth_opts
   if [ -n "$VNC_PW" ]; then
     mkdir -p "$HOME/.x11vnc"
     x11vnc -storepasswd "$VNC_PW" "$HOME/.x11vnc/passwd" 2>/dev/null
     chmod 600 "$HOME/.x11vnc/passwd"
-    auth_opts="-rfbauth $HOME/.x11vnc/passwd"
-  else
-    auth_opts="-nopw"
-    echo "WARNING: VNC started WITHOUT a password (--no-vnc-pw)." >&2
+  fi
+}
+
+# --------------------------------------------------------------------------
+# Flags for the supervised (auto-start) run, baked into the systemd viewer unit.
+# Only run-time flags belong here; config/sessions are applied once by the init
+# pass (--exit-on-init) and persisted, so they must NOT be re-passed (would
+# re-create sessions or wipe them via --clear-all-sessions). --reset-interval is
+# handled INSIDE the viewer (it gracefully self-restarts on that interval);
+# systemd merely relaunches it on the clean exit.
+# --------------------------------------------------------------------------
+build_run_flags() {
+  RUN_FLAGS=(--auto-start --in-loop --render-to-terminal)
+  [ -n "$RESET_INTERVAL" ] && RUN_FLAGS+=("--reset-interval=$RESET_INTERVAL")
+}
+
+# --------------------------------------------------------------------------
+# Init run: apply cmdline settings/sessions to the persisted config, then exit.
+# --------------------------------------------------------------------------
+run_init() {
+  echo ""
+  echo "==> Initializing settings..."
+  kill_viewer
+  "$INSTALL_DIR/nhviewer" "${APP_ARGS[@]}" --exit-on-init
+  echo "==> Init complete."
+}
+
+# --------------------------------------------------------------------------
+# Tear down EVERY trace of a previous run so re-running install.sh never
+# conflicts. Also kills any runner.sh loop left behind by older versions of
+# this script (we no longer create one), to avoid loop-on-loop. Safe when
+# nothing is running.
+# --------------------------------------------------------------------------
+teardown_stack() {
+  local dnum="${XVFB_DISPLAY#:}"; dnum="${dnum%%.*}"
+  echo "==> Cleaning up any previous instance..."
+  # Stop systemd-managed units from a prior run (if any)
+  systemctl stop "${SCREEN_SESSION}.service" "${SCREEN_SESSION}-vnc.service" "${SCREEN_SESSION}-xvfb.service" 2>/dev/null || true
+  # Kill the screen session AND any stale runner.sh loop from an older version
+  screen -S "$SCREEN_SESSION" -X quit >/dev/null 2>&1 || true
+  pkill -TERM -f "$INSTALL_DIR/runner.sh" 2>/dev/null || true
+  sleep 2
+  pkill -KILL -f "$INSTALL_DIR/runner.sh" 2>/dev/null || true
+  rm -f "$INSTALL_DIR/runner.sh" 2>/dev/null || true
+  # Kill viewer + engine children
+  kill_viewer
+  # Kill any stray Xvfb on our display and clear its lock
+  pkill -f "Xvfb $XVFB_DISPLAY" 2>/dev/null || true
+  sleep 1
+  rm -f "/tmp/.X${dnum}-lock" "/tmp/.X11-unix/X${dnum}" 2>/dev/null || true
+  screen -wipe >/dev/null 2>&1 || true
+}
+
+# --------------------------------------------------------------------------
+# systemd setup (the only supervisor). Writes the units, enables them (reboot
+# persistence), and (re)starts the supervised stack. The viewer runs inside
+# `screen` so the dashboard stays attachable (screen -r). Idempotent: re-running
+# overwrites the units and restarts cleanly.
+# --------------------------------------------------------------------------
+setup_systemd() {
+  local dnum xvfb_bin x11vnc_bin screen_bin vnc_units="" exec_pre="" exec_start
+  dnum="${XVFB_DISPLAY#:}"; dnum="${dnum%%.*}"
+  xvfb_bin=$(command -v Xvfb); screen_bin=$(command -v screen); x11vnc_bin=$(command -v x11vnc)
+
+  echo "==> Installing systemd services..."
+
+  # --- Xvfb display unit ---
+  cat > "/etc/systemd/system/${SCREEN_SESSION}-xvfb.service" << UNIT
+[Unit]
+Description=9hits Xvfb virtual display $XVFB_DISPLAY
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=-/bin/sh -c 'rm -f /tmp/.X${dnum}-lock /tmp/.X11-unix/X${dnum} 2>/dev/null'
+ExecStart=$xvfb_bin $XVFB_DISPLAY -screen 0 $XVFB_RESOLUTION -nolisten tcp
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+  # --- optional x11vnc unit ---
+  if [ "$DO_INSTALL_VNC" -eq 1 ]; then
+    local vnc_auth="-nopw"
+    [ -n "$VNC_PW" ] && vnc_auth="-rfbauth $HOME/.x11vnc/passwd"
+    cat > "/etc/systemd/system/${SCREEN_SESSION}-vnc.service" << UNIT
+[Unit]
+Description=9hits x11vnc (mirror $XVFB_DISPLAY)
+After=${SCREEN_SESSION}-xvfb.service
+Requires=${SCREEN_SESSION}-xvfb.service
+BindsTo=${SCREEN_SESSION}-xvfb.service
+
+[Service]
+Type=simple
+ExecStart=$x11vnc_bin -display $XVFB_DISPLAY -rfbport $VNC_PORT -forever -shared -noxdamage -quiet $vnc_auth
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    vnc_units="${SCREEN_SESSION}-vnc.service"
   fi
 
-  # shellcheck disable=SC2086
-  x11vnc -display "$XVFB_DISPLAY" -rfbport "$VNC_PORT" \
-    -forever -shared -noxdamage -quiet \
-    $auth_opts &
-  disown $!
+  # --- viewer unit: runs nhviewer DIRECTLY inside screen so the dashboard stays
+  # attachable (screen -r) while systemd is the sole supervisor. systemd's
+  # Restart=always relaunches on crash AND on the viewer's own scheduled clean
+  # exit (--reset-interval), so there is no restart loop to maintain here. ---
+  if [ -n "$screen_bin" ]; then
+    exec_pre="ExecStartPre=-$screen_bin -S $SCREEN_SESSION -X quit"
+    exec_start="$screen_bin -DmS $SCREEN_SESSION $INSTALL_DIR/nhviewer ${RUN_FLAGS[*]}"
+  else
+    # No screen -> the unit has no controlling pty, so drop --render-to-terminal
+    # (its alternate-screen takeover would just spew escape codes into the journal).
+    local headless_flags=() f
+    for f in "${RUN_FLAGS[@]}"; do [ "$f" = "--render-to-terminal" ] || headless_flags+=("$f"); done
+    exec_start="$INSTALL_DIR/nhviewer ${headless_flags[*]}"
+  fi
+  cat > "/etc/systemd/system/${SCREEN_SESSION}.service" << UNIT
+[Unit]
+Description=9hits viewer
+After=${SCREEN_SESSION}-xvfb.service network-online.target
+Requires=${SCREEN_SESSION}-xvfb.service
+StartLimitIntervalSec=0
 
-  # Wait briefly and verify it's up
+[Service]
+Type=simple
+Environment=DISPLAY=$XVFB_DISPLAY HOME=$HOME
+WorkingDirectory=$INSTALL_DIR
+$exec_pre
+ExecStart=$exec_start
+Restart=always
+RestartSec=$RESTART_DELAY
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+  systemctl daemon-reload
+  systemctl enable "${SCREEN_SESSION}-xvfb.service" $vnc_units "${SCREEN_SESSION}.service" >/dev/null 2>&1 || true
+
+  # Bring the display (+VNC) up BEFORE the init pass needs it.
+  systemctl restart "${SCREEN_SESSION}-xvfb.service"
+  [ -n "$vnc_units" ] && systemctl restart "$vnc_units"
+  export DISPLAY="$XVFB_DISPLAY"
   local tries=0
-  until ss -tlnp 2>/dev/null | grep -q ":${VNC_PORT}" || [ $tries -ge 10 ]; do
-    sleep 0.5; ((tries++))
-  done
+  until xdpyinfo -display "$XVFB_DISPLAY" &>/dev/null || [ $tries -ge 20 ]; do sleep 0.5; ((tries++)); done
 
-  echo "x11vnc started - mirrors display $XVFB_DISPLAY on port $VNC_PORT"
+  run_init
+
+  systemctl restart "${SCREEN_SESSION}.service"
 }
 
 # --------------------------------------------------------------------------
@@ -301,88 +423,61 @@ main() {
   parse_args "$@"
   check_system
 
-  # --- Optional root-only steps ---
-  if [ "$DO_INSTALL_DEPS" -eq 1 ]; then
-    [ "$(id -u)" -ne 0 ] && { echo "ERROR: --install-deps requires root (run with sudo)." >&2; exit 1; }
-    install_deps
+  # Validate --reset-interval early (number + optional s/m/h/d unit).
+  if [ -n "$RESET_INTERVAL" ] && ! echo "$RESET_INTERVAL" | grep -Eq '^[0-9]+[smhd]?$'; then
+    echo "ERROR: --reset-interval must be a number with an optional s/m/h/d unit (e.g. 30m, 1h, 6h, 24h)." >&2
+    exit 1
   fi
 
-  if [ "$DO_INSTALL_VNC" -eq 1 ]; then
-    [ "$(id -u)" -ne 0 ] && { echo "ERROR: --install-vnc requires root (run with sudo)." >&2; exit 1; }
-    install_vnc
+  # systemd is required: it is the supervisor (auto-restart + boot persistence).
+  if [ ! -d /run/systemd/system ]; then
+    echo "ERROR: this installer requires systemd (no /run/systemd/system)." >&2
+    echo "       For containers / non-systemd hosts, use the Docker image instead." >&2
+    exit 1
+  fi
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "ERROR: root is required (systemd unit installation). Re-run with sudo." >&2
+    exit 1
   fi
 
-  if [ -n "$CREATE_SWAP" ]; then
-    [ "$(id -u)" -ne 0 ] && { echo "ERROR: --create-swap requires root (run with sudo)." >&2; exit 1; }
-    setup_swap "$CREATE_SWAP"
-  fi
+  # --- Optional steps (root already guaranteed above) ---
+  [ "$DO_INSTALL_DEPS" -eq 1 ] && install_deps
+  [ "$DO_INSTALL_VNC" -eq 1 ] && install_vnc
+  [ -n "$CREATE_SWAP" ] && setup_swap "$CREATE_SWAP"
 
   # --- Download ---
   download_app
 
-  # --- Virtual display ---
+  # --- Resolve virtual display resolution ---
   if [ -z "$XVFB_RESOLUTION" ] || [ "$XVFB_RESOLUTION" = "auto" ]; then
     XVFB_RESOLUTION=$(auto_resolution)
     echo "Auto-selected Xvfb resolution: $XVFB_RESOLUTION ($(nproc 2>/dev/null) cores)"
   fi
-  start_xvfb
-  export DISPLAY="$XVFB_DISPLAY"
 
-  # --- VNC (mirrors Xvfb so you can see nhviewer remotely) ---
-  if [ "$DO_INSTALL_VNC" -eq 1 ]; then
-    start_vnc
+  # Clean up any previous run first (idempotent; also clears stale old-version loops).
+  teardown_stack
+
+  # Assemble the run-time flags baked into the viewer unit.
+  build_run_flags
+
+  # VNC password must exist before the unit (which uses -rfbauth) starts.
+  [ "$DO_INSTALL_VNC" -eq 1 ] && prepare_vnc_password
+  setup_systemd
+
+  echo ""
+  local disable_units="$SCREEN_SESSION $SCREEN_SESSION-xvfb"
+  [ "$DO_INSTALL_VNC" -eq 1 ] && disable_units="$disable_units $SCREEN_SESSION-vnc"
+  echo "==> 9HitsViewer is running under systemd (auto-restart + survives reboot)."
+  echo "    Status   : systemctl status $SCREEN_SESSION"
+  echo "    Logs     : journalctl -u $SCREEN_SESSION -f"
+  command -v screen >/dev/null 2>&1 && \
+    echo "    Dashboard: screen -dr $SCREEN_SESSION   (Ctrl+A then D to detach)"
+  echo "    Stop     : systemctl stop $SCREEN_SESSION"
+  echo "    Disable  : systemctl disable --now $disable_units"
+
+  if [ -n "$RESET_INTERVAL" ]; then
+    echo "    Reset    : viewer self-restarts every $RESET_INTERVAL (graceful, in-app)"
   fi
-
-  # --- Init run: apply cmdline settings/sessions, then exit ---
-  echo ""
-  echo "==> Initializing settings..."
-  kill_viewer
-  "$INSTALL_DIR/nhviewer" "${APP_ARGS[@]}" --exit-on-init
-  echo "==> Init complete."
-
-  # --- Generate runner script ---
-  # NOTE: the runner only passes --auto-start. The config/session args
-  # (--access-key, --system-session, --clear-all-sessions, proxy lists, etc.)
-  # are applied once above via --exit-on-init and persisted; re-passing them on
-  # every restart would re-create sessions or wipe them (--clear-all-sessions).
-  cat > "$INSTALL_DIR/runner.sh" << RUNNER_EOF
-#!/bin/bash
-export DISPLAY=$XVFB_DISPLAY
-
-RESTART_DELAY=$RESTART_DELAY
-PERIODIC_RESTART=86400  # restart every 24 h regardless of crash
-
-kill_viewer() {
-  pkill -TERM -f nhviewer  2>/dev/null || true
-  pkill -TERM -f may  2>/dev/null || true
-  sleep 2
-  pkill -KILL -f nhviewer  2>/dev/null || true
-  pkill -KILL -f may  2>/dev/null || true
-}
-
-while true; do
-  kill_viewer
-
-  # Run nhviewer in the FOREGROUND: its dashboard requires a controlling TTY and
-  # exits immediately if backgrounded with '&'. 'timeout' provides the periodic
-  # 24h restart (sends SIGTERM, exit code 124) without backgrounding.
-  timeout \$PERIODIC_RESTART $INSTALL_DIR/nhviewer --auto-start --in-loop --render-to-terminal
-
-  echo "[\$(date '+%Y-%m-%d %H:%M:%S')] nhviewer exited - restarting in \${RESTART_DELAY}s..."
-  sleep \$RESTART_DELAY
-done
-RUNNER_EOF
-  chmod +x "$INSTALL_DIR/runner.sh"
-
-  # --- Launch runner inside a detached screen session ---
-  screen -S "$SCREEN_SESSION" -X quit >/dev/null 2>&1
-  sleep 1
-  screen -dmS "$SCREEN_SESSION" "$INSTALL_DIR/runner.sh"
-
-  echo ""
-  echo "==> 9HitsViewer is running in screen session '$SCREEN_SESSION'."
-  echo "    Attach : screen -r $SCREEN_SESSION"
-  echo "    Stop   : screen -S $SCREEN_SESSION -X quit"
 
   if [ "$DO_INSTALL_VNC" -eq 1 ]; then
     local server_ip
@@ -396,7 +491,6 @@ RUNNER_EOF
     else
       echo "    Password : none (--no-vnc-pw)"
     fi
-    echo "    To restart VNC manually: x11vnc -display $XVFB_DISPLAY -rfbport $VNC_PORT -forever -shared -noxdamage -nopw &"
   fi
 }
 

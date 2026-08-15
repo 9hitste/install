@@ -4,6 +4,7 @@
 # Requires systemd + root. For containers/non-systemd hosts use the Docker image.
 
 DEFAULT_DOWNLOAD="https://dl.9hits.com/9hitsv6-linux64.tar.bz2"
+DEFAULT_CACHE_LIMIT=209715200   # 200MB (200 * 1024 * 1024), applied when --cache-limit is omitted
 
 # --- Defaults ---
 INSTALL_DIR="/opt/9hits"
@@ -18,6 +19,7 @@ CREATE_SWAP=""
 XVFB_DISPLAY=":99"
 SCREEN_SESSION="9hits"
 RESET_INTERVAL=""   # e.g. 6h/24h/30m -> forwarded to the viewer (--reset-interval), which gracefully self-restarts on that interval; empty = never
+CACHE_LIMIT=""      # bytes; empty -> DEFAULT_CACHE_LIMIT is forwarded to the viewer
 
 # App args forwarded to nhviewer (--exit-on-init / --auto-start are managed by this script)
 APP_ARGS=()
@@ -41,12 +43,17 @@ parse_args() {
       --restart-delay=*) RESTART_DELAY="${arg#*=}" ;;
       --default-dl=*)    DEFAULT_DOWNLOAD="${arg#*=}" ;;
       --reset-interval=*) RESET_INTERVAL="${arg#*=}" ;;
+      # Captured (not forwarded here) so we can apply a default when omitted
+      --cache-limit=*)   CACHE_LIMIT="${arg#*=}" ;;
       # Script controls these - strip from forwarded args
       --exit-on-init|--auto-start) ;;
       # Everything else goes straight to nhviewer
       *) APP_ARGS+=("$arg") ;;
     esac
   done
+
+  # Cap the browser disk cache by default (the viewer's own default is unlimited).
+  APP_ARGS+=("--cache-limit=${CACHE_LIMIT:-$DEFAULT_CACHE_LIMIT}")
 }
 
 # --------------------------------------------------------------------------

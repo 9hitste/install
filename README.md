@@ -51,7 +51,7 @@ curl -sSLk https://9hitste.github.io/install/v6/install.sh | sudo bash -s -- opt
 | --bulk-add-proxy-type | Proxy type for bulk add, possible values: `http`, `socks4`, `socks5`, `ssh` |
 | --session-note | Note applied to all created sessions |
 | --cache-path | Override the default browser cache directory |
-| --cache-limit | `-1`: default, `0`: no cache, or a number of bytes to limit disk cache usage, eg: 104857600 (for 100MB = 100 * 1024 * 1024) |
+| --cache-limit | Number of bytes to limit disk cache usage, eg: 104857600 (for 100MB = 100 * 1024 * 1024). `-1`: unlimited, `0`: no cache. Omitted = `209715200` (200MB), applied by this installer |
 | --clear-all-sessions | Remove all previously created sessions before applying new configuration |
 | --hide-columns | Comma-separated columns to hide in the viewer table; every other column is forced shown (overrides the saved layout). Columns: `id`, `note`, `proxy`, `client`, `quality`, `hits`, `points` (`status` is always shown). e.g. `--hide-columns=quality,points` |
 

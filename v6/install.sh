@@ -20,6 +20,7 @@ XVFB_DISPLAY=":99"
 SCREEN_SESSION="9hits"
 RESET_INTERVAL=""   # e.g. 6h/24h/30m -> forwarded to the viewer (--reset-interval), which gracefully self-restarts on that interval; empty = never
 CACHE_LIMIT=""      # bytes; empty -> DEFAULT_CACHE_LIMIT is forwarded to the viewer
+SKIP_LEGACY_CLEANUP=0   # 1 (--skip-legacy-cleanup) = leave a pre-existing 9Hits v3 install alone
 
 # App args forwarded to nhviewer (--exit-on-init / --auto-start are managed by this script)
 APP_ARGS=()
@@ -45,6 +46,8 @@ parse_args() {
       --reset-interval=*) RESET_INTERVAL="${arg#*=}" ;;
       # Captured (not forwarded here) so we can apply a default when omitted
       --cache-limit=*)   CACHE_LIMIT="${arg#*=}" ;;
+      # Old-version cleanup is on by default; opt out with --skip-legacy-cleanup
+      --skip-legacy-cleanup) SKIP_LEGACY_CLEANUP=1 ;;
       # Script controls these - strip from forwarded args
       --exit-on-init|--auto-start) ;;
       # Everything else goes straight to nhviewer
@@ -424,6 +427,150 @@ UNIT
 }
 
 # --------------------------------------------------------------------------
+# Legacy v3 removal (github.com/9hitste/install/3.0.4)
+#
+LEGACY_DIRNAME="9hitsv3-linux64"
+LEGACY_USER="_9hits"
+LEGACY_PROCS=(9hits 9hbrowser 9htl 9HitsApp)
+
+# Users whose crontab references the old app (normally just _9hits).
+legacy_cron_users() {
+  local spool f
+  for spool in /var/spool/cron/crontabs /var/spool/cron; do
+    [ -d "$spool" ] || continue
+    for f in "$spool"/*; do
+      [ -f "$f" ] || continue
+      grep -qE "$LEGACY_DIRNAME|cron-start" "$f" 2>/dev/null && basename "$f"
+    done
+  done | sort -u
+}
+
+# Every <parent>/9hitsv3-linux64 on the box: from the running processes (most
+# reliable - finds any --install-dir), from the crontabs, then the usual homes.
+legacy_dirs() {
+  {
+    local p pid exe home
+    for p in "${LEGACY_PROCS[@]}"; do
+      for pid in $(pgrep -x "$p" 2>/dev/null); do
+        exe=$(readlink -f "/proc/$pid/exe" 2>/dev/null)
+        case "$exe" in
+          */$LEGACY_DIRNAME/*) echo "${exe%%/$LEGACY_DIRNAME/*}/$LEGACY_DIRNAME" ;;
+        esac
+      done
+    done
+    grep -hoE "[^[:space:]\"']*/$LEGACY_DIRNAME" \
+      /var/spool/cron/crontabs/* /var/spool/cron/* /etc/cron.d/* /etc/crontab 2>/dev/null
+    if id "$LEGACY_USER" >/dev/null 2>&1; then
+      home=$(getent passwd "$LEGACY_USER" 2>/dev/null | cut -d: -f6)
+      [ -n "$home" ] && [ -d "$home/$LEGACY_DIRNAME" ] && echo "$home/$LEGACY_DIRNAME"
+    fi
+    ls -d /root/"$LEGACY_DIRNAME" /home/*/"$LEGACY_DIRNAME" \
+          /opt/"$LEGACY_DIRNAME" /opt/*/"$LEGACY_DIRNAME" 2>/dev/null
+  } | sed 's#//*#/#g' | grep -v '^$' | sort -u
+}
+
+# True only for things that actually run or occupy the disk - a leftover
+# "_9hits" account on its own is not a v3 install.
+legacy_present() {
+  local p
+  [ -n "$(legacy_dirs)" ] && return 0
+  [ -n "$(legacy_cron_users)" ] && return 0
+  for p in "${LEGACY_PROCS[@]}"; do pgrep -x "$p" >/dev/null 2>&1 && return 0; done
+  return 1
+}
+
+remove_legacy_v3() {
+  local u d f sw parent home tmp p dirs users
+
+  if ! legacy_present; then
+    if id "$LEGACY_USER" >/dev/null 2>&1; then
+      echo "No v3 install found (only a leftover '$LEGACY_USER' account, nothing running)."
+    else
+      echo "No previous v3 installation found."
+    fi
+    return 0
+  fi
+
+  echo ""
+  echo "==> Previous 9Hits v3 install detected - removing it (it would keep running alongside v6)..."
+  dirs=$(legacy_dirs)
+  users=$(legacy_cron_users)
+
+  # --- 1) cron: user crontabs, then system-wide files ---
+  if command -v crontab >/dev/null 2>&1; then
+    for u in $users; do
+      tmp=$(mktemp)
+      crontab -u "$u" -l 2>/dev/null | grep -vE "$LEGACY_DIRNAME|cron-start" > "$tmp"
+      # Keep the crontab only if something other than blanks/comments survives.
+      if grep -qE '^[[:space:]]*[^#[:space:]]' "$tmp" 2>/dev/null; then
+        crontab -u "$u" "$tmp"
+      else
+        crontab -u "$u" -r 2>/dev/null
+      fi
+      rm -f "$tmp"
+      echo "    - crontab of user '$u' cleaned"
+    done
+  fi
+  for f in /etc/crontab /etc/cron.d/*; do
+    [ -f "$f" ] || continue
+    if grep -q "$LEGACY_DIRNAME" "$f" 2>/dev/null; then
+      sed -i "/$LEGACY_DIRNAME/d" "$f"
+      echo "    - v3 lines removed from $f"
+    fi
+  done
+
+  # --- 2) processes: known binaries by exact name, then anything still running
+  #        out of the old directory (its CEF helpers show up as "exe") ---
+  for p in "${LEGACY_PROCS[@]}"; do pkill -TERM -x "$p" 2>/dev/null; done
+  pkill -TERM -f "/$LEGACY_DIRNAME/" 2>/dev/null
+  sleep 2
+  for p in "${LEGACY_PROCS[@]}"; do pkill -KILL -x "$p" 2>/dev/null; done
+  pkill -KILL -f "/$LEGACY_DIRNAME/" 2>/dev/null
+
+  # --- 3) its Xvfb (:1) and helpers - only ones owned by the v3 accounts, so a
+  #        foreign X server on the same display is never touched ---
+  for u in $users $LEGACY_USER; do
+    id "$u" >/dev/null 2>&1 || continue
+    pkill -KILL -u "$u" -f "Xvfb :1" 2>/dev/null
+    # "exe" is the v3 CEF helper - generic enough that we only ever kill it
+    # under the dedicated account
+    [ "$u" = "$LEGACY_USER" ] && pkill -KILL -u "$u" -x exe 2>/dev/null
+  done
+  if ! pgrep -f "Xvfb :1" >/dev/null 2>&1; then
+    rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null
+  fi
+
+  # --- 4) swap file created by the old installer (<install-dir>/9hits_swap) ---
+  for sw in $(awk '/9hits_swap/{print $1}' /proc/swaps 2>/dev/null); do
+    swapoff "$sw" 2>/dev/null && echo "    - swapoff $sw"
+    rm -f "$sw"
+  done
+
+  # --- 5) files: install dir, leftover archives, per-user config/cache ---
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    case "$d" in */$LEGACY_DIRNAME) ;; *) continue ;; esac   # never rm anything else
+    [ -d "$d" ] || continue
+    parent=$(dirname "$d")
+    rm -rf "$d"
+    rm -f "$parent/_9hits.tar.bz2" "$parent/_9hits_patch.tar.bz2"
+    swapoff "$parent/9hits_swap" 2>/dev/null; rm -f "$parent/9hits_swap"
+    echo "    - removed $d"
+  done <<< "$dirs"
+
+  for u in $users $LEGACY_USER root; do
+    id "$u" >/dev/null 2>&1 || continue
+    home=$(getent passwd "$u" 2>/dev/null | cut -d: -f6)
+    [ -n "$home" ] && [ -d "$home" ] || continue
+    rm -rf "$home/.config/9hits-app" "$home/.cache/9hits-app"
+  done
+
+  id "$LEGACY_USER" >/dev/null 2>&1 && \
+    echo "    - user '$LEGACY_USER' kept (delete manually if unused: userdel -r $LEGACY_USER)"
+  echo "==> v3 removal complete."
+}
+
+# --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
 main() {
@@ -445,6 +592,12 @@ main() {
   if [ "$(id -u)" -ne 0 ]; then
     echo "ERROR: root is required (systemd unit installation). Re-run with sudo." >&2
     exit 1
+  fi
+
+  # --- Remove any 9Hits v3 install BEFORE anything else: its crontab respawns
+  #     the old app every minute, so it must not survive a long dep install. ---
+  if [ "$SKIP_LEGACY_CLEANUP" -eq 0 ]; then
+    remove_legacy_v3
   fi
 
   # --- Optional steps (root already guaranteed above) ---

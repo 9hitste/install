@@ -21,6 +21,8 @@ SCREEN_SESSION="9hits"
 RESET_INTERVAL=""   # e.g. 6h/24h/30m -> forwarded to the viewer (--reset-interval), which gracefully self-restarts on that interval; empty = never
 CACHE_LIMIT=""      # bytes; empty -> DEFAULT_CACHE_LIMIT is forwarded to the viewer
 SKIP_LEGACY_CLEANUP=0   # 1 (--skip-legacy-cleanup) = leave a pre-existing 9Hits v3 install alone
+IPV4_ONLY=0         # 1 (--ipv4-only)
+ENABLE_CRASH_REPORTER=0   # 1 (--may-enable-crash-reporter)
 
 # App args forwarded to nhviewer (--exit-on-init / --auto-start are managed by this script)
 APP_ARGS=()
@@ -44,6 +46,8 @@ parse_args() {
       --restart-delay=*) RESTART_DELAY="${arg#*=}" ;;
       --default-dl=*)    DEFAULT_DOWNLOAD="${arg#*=}" ;;
       --reset-interval=*) RESET_INTERVAL="${arg#*=}" ;;
+      --ipv4-only)       IPV4_ONLY=1 ;;
+      --may-enable-crash-reporter) ENABLE_CRASH_REPORTER=1 ;;
       # Captured (not forwarded here) so we can apply a default when omitted
       --cache-limit=*)   CACHE_LIMIT="${arg#*=}" ;;
       # Old-version cleanup is on by default; opt out with --skip-legacy-cleanup
@@ -284,6 +288,11 @@ prepare_vnc_password() {
 build_run_flags() {
   RUN_FLAGS=(--auto-start --in-loop --render-to-terminal)
   [ -n "$RESET_INTERVAL" ] && RUN_FLAGS+=("--reset-interval=$RESET_INTERVAL")
+  # Must be re-passed here, not just at install time: the viewer reads it from argv on
+  # every start and does not persist it, so a flag only given to the init pass would be
+  # gone the moment systemd relaunched the app.
+  [ "$IPV4_ONLY" = "1" ] && RUN_FLAGS+=("--ipv4-only")
+  [ "$ENABLE_CRASH_REPORTER" = "1" ] && RUN_FLAGS+=("--may-enable-crash-reporter")
 }
 
 # --------------------------------------------------------------------------

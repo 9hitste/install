@@ -20,6 +20,8 @@ Other distros may work but are not well-tested.
 > **Note:** This installer **requires systemd and root** (run with `sudo`). systemd supervises the viewer - it auto-restarts on crash and survives reboot. System dependencies (`screen`, `Xvfb`, etc.) are installed **automatically**; pass `--skip-install-deps` to skip that (e.g. on re-runs). With `screen` present the viewer runs inside a **screen** session named `9hits` so you can attach to watch the live dashboard; without it the viewer still runs headless under systemd (follow it with `journalctl -u 9hits -f`).
 > For containers or non-systemd hosts, use the Docker image instead!
 
+> **Upgrading from v3?** The installer detects a previous **9Hits App v3** install (the old `3.0.4` script: the `_9hits` user, `9hitsv3-linux64`, its per-minute crontab and `Xvfb :1`) and removes it first - otherwise both versions keep running side by side and fight over the machine. Pass `--skip-legacy-cleanup` to leave it alone.
+
 # Install
 Run with `sudo` (systemd + root required). System dependencies (`screen`, `Xvfb`, etc.) are installed automatically; add `--skip-install-deps` to skip them
 (e.g. on re-runs where they are already present):
@@ -32,6 +34,7 @@ curl -sSLk https://9hitste.github.io/install/v6/install.sh | sudo bash -s -- opt
 | --- | --- |
 | --install-dir | Where to download and extract the 9Hits Viewer (also holds its config + browser cache/profiles), default is `/opt/9hits` |
 | --skip-install-deps | Skip installing system dependencies (Xvfb, libnss3, libgtk-3-0, screen, etc.). They are installed by default; use this on re-runs where they are already present |
+| --skip-legacy-cleanup | Do NOT remove an existing 9Hits App **v3** install (old `3.0.4` installer). By default it is stopped and removed - crontab, processes, its `Xvfb :1`, install dir, swap file and cache - before v6 is installed |
 | --install-vnc | Install x11vnc and start a VNC server mirroring the viewer display, requires root |
 | --vnc-pw | VNC password. If omitted, a random password is generated and printed to the terminal |
 | --no-vnc-pw | Run VNC with NO password (open). Only use this if you explicitly want an unauthenticated VNC |
@@ -54,6 +57,9 @@ curl -sSLk https://9hitste.github.io/install/v6/install.sh | sudo bash -s -- opt
 | --cache-limit | Number of bytes to limit disk cache usage, eg: 104857600 (for 100MB = 100 * 1024 * 1024). `-1`: unlimited, `0`: no cache. Omitted = `209715200` (200MB), applied by this installer |
 | --clear-all-sessions | Remove all previously created sessions before applying new configuration |
 | --hide-columns | Comma-separated columns to hide in the viewer table; every other column is forced shown (overrides the saved layout). Columns: `id`, `note`, `proxy`, `client`, `quality`, `hits`, `points` (`status` is always shown). e.g. `--hide-columns=quality,points` |
+| --enable-api | Turn on the viewer's local API, so your scripts and tools can manage sessions over HTTP (see the [Viewer API docs](https://docs.9hits.com/traffic-exchange/viewer/api/)). The key is printed at the end of the install. `--enable-api=no` turns it off again. Requires a viewer build with the API |
+| --api-key | Key for the local API, 32 hex characters. Generated and printed when omitted; pass the printed key on the next run to keep it |
+| --api-port | Port of the local API, default `37288` |
 
 # Examples
 All examples below default to creating 10G [SWAP](https://opensource.com/article/18/9/swap-space-linux-systems), recommended if your machine uses an SSD and has limited RAM. Remove `--create-swap=10G` if not needed (also remove `sudo`).
@@ -79,6 +85,11 @@ curl -sSLk https://9hitste.github.io/install/v6/install.sh | sudo bash -s -- --i
 ```
 After install, the script prints the VNC address (`<server-ip>:5901`). Connect with a VNC client and you will see the viewer running live.
 
+- Turn on the local API so your own scripts can manage the sessions (the key is printed at the end; keep it private):
+```
+curl -sSLk https://9hitste.github.io/install/v6/install.sh | sudo bash -s -- --access-key=186eaced825ab3e3468dfda97d880333 --system-session --enable-api
+```
+
 # Supervision: systemd
 
 The viewer is supervised by **systemd**, so it **auto-restarts if killed and survives
@@ -97,6 +108,16 @@ a fresh instance. This is a clean self-restart, not an external `kill` - no half
 cache or orphaned Chromium processes. Without the flag, the viewer is only restarted on
 crash. The minimum interval is 60s and the maximum is ~24 days; out-of-range values are
 clamped. (Requires a viewer build that supports `--reset-interval`.)
+
+## Local API (`--enable-api`)
+
+With `--enable-api` the viewer answers HTTP requests on port `37288` (change it with
+`--api-port`), so your own scripts and tools can add sessions, change their proxies, start
+and stop them and read their status. The installer prints the address and the key at the
+end. Re-running without `--api-key` makes a new key; pass `--api-key=<key>` to keep the one
+your tools already use. The API listens on every address of the machine and the key is the
+only lock, so keep it private. Full reference:
+https://docs.9hits.com/traffic-exchange/viewer/api/ (Requires a viewer build with the API.)
 
 ```
 # Watch the live dashboard (when screen is installed)

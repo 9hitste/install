@@ -23,6 +23,12 @@ CACHE_LIMIT=""      # bytes; empty -> DEFAULT_CACHE_LIMIT is forwarded to the vi
 SKIP_LEGACY_CLEANUP=0   # 1 (--skip-legacy-cleanup) = leave a pre-existing 9Hits v3 install alone
 IPV4_ONLY=0         # 1 (--ipv4-only)
 ENABLE_CRASH_REPORTER=0   # 1 (--may-enable-crash-reporter)
+# Local API of the viewer (docs: https://docs.9hits.com/traffic-exchange/viewer/api/). Off unless
+# --enable-api. The key is generated here when not given, so it can be printed at the end; the viewer
+# persists all three, so they are passed to the init run only.
+ENABLE_API=0        # 1 (--enable-api); 2 (--enable-api=no) turns a previously enabled API off
+API_KEY=""          # 32 hex chars (--api-key), generated when --enable-api is given without one
+API_PORT=""         # 1024-65535 (--api-port), the viewer's default is 37288
 
 # App args forwarded to nhviewer (--exit-on-init / --auto-start are managed by this script)
 APP_ARGS=()
@@ -48,6 +54,10 @@ parse_args() {
       --reset-interval=*) RESET_INTERVAL="${arg#*=}" ;;
       --ipv4-only)       IPV4_ONLY=1 ;;
       --may-enable-crash-reporter) ENABLE_CRASH_REPORTER=1 ;;
+      --enable-api)      ENABLE_API=1 ;;
+      --enable-api=*)    case "${arg#*=}" in no|false|0) ENABLE_API=2 ;; *) ENABLE_API=1 ;; esac ;;
+      --api-key=*)       API_KEY="${arg#*=}" ;;
+      --api-port=*)      API_PORT="${arg#*=}" ;;
       # Captured (not forwarded here) so we can apply a default when omitted
       --cache-limit=*)   CACHE_LIMIT="${arg#*=}" ;;
       # Old-version cleanup is on by default; opt out with --skip-legacy-cleanup
@@ -256,6 +266,34 @@ install_vnc() {
 # Random 8-char alphanumeric (VNC truncates passwords to 8 chars anyway).
 gen_password() {
   LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom 2>/dev/null | head -c 8
+}
+
+# Random 32 hex chars: the format the viewer's local API key must have.
+gen_api_key() {
+  LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c 32
+}
+
+# --------------------------------------------------------------------------
+# Local API: validate --api-key / --api-port, generate the key when needed and
+# forward all three to the init run (the viewer persists them in its settings).
+# --------------------------------------------------------------------------
+prepare_api() {
+  if [ -n "$API_KEY" ] && ! echo "$API_KEY" | grep -Eq '^[0-9a-fA-F]{32}$'; then
+    echo "ERROR: --api-key must be 32 hex characters." >&2
+    exit 1
+  fi
+  if [ -n "$API_PORT" ] && { ! echo "$API_PORT" | grep -Eq '^[0-9]+$' || [ "$API_PORT" -lt 1024 ] || [ "$API_PORT" -gt 65535 ]; }; then
+    echo "ERROR: --api-port must be a number from 1024 to 65535." >&2
+    exit 1
+  fi
+  if [ "$ENABLE_API" -eq 1 ] && [ -z "$API_KEY" ]; then
+    API_KEY=$(gen_api_key)
+  fi
+  [ "$ENABLE_API" -eq 1 ] && APP_ARGS+=("--enable-api")
+  [ "$ENABLE_API" -eq 2 ] && APP_ARGS+=("--enable-api=no")
+  [ -n "$API_KEY" ]  && APP_ARGS+=("--api-key=$API_KEY")
+  [ -n "$API_PORT" ] && APP_ARGS+=("--api-port=$API_PORT")
+  return 0
 }
 
 # Resolve the VNC password (random unless given, or none with --no-vnc-pw) and
@@ -592,6 +630,8 @@ main() {
     exit 1
   fi
 
+  prepare_api
+
   # systemd is required: it is the supervisor (auto-restart + boot persistence).
   if [ ! -d /run/systemd/system ]; then
     echo "ERROR: this installer requires systemd (no /run/systemd/system)." >&2
@@ -648,9 +688,19 @@ main() {
     echo "    Reset    : viewer self-restarts every $RESET_INTERVAL (graceful, in-app)"
   fi
 
+  local server_ip
+  server_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+
+  if [ "$ENABLE_API" -eq 1 ]; then
+    echo ""
+    echo "==> Local API is on (your scripts and tools can control this viewer)."
+    echo "    Address  : http://${server_ip:-<server-ip>}:${API_PORT:-37288}   (on this machine: http://127.0.0.1:${API_PORT:-37288})"
+    echo "    Key      : $API_KEY"
+    echo "    Docs     : https://docs.9hits.com/traffic-exchange/viewer/api/"
+    echo "    Keep the key private. Re-run with --api-key=$API_KEY to keep it; without it a new key is made."
+  fi
+
   if [ "$DO_INSTALL_VNC" -eq 1 ]; then
-    local server_ip
-    server_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
     echo ""
     echo "==> VNC is running - connect to view nhviewer live."
     echo "    Address  : ${server_ip:-<server-ip>}:$VNC_PORT"

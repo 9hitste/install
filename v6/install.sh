@@ -8,6 +8,7 @@ DEFAULT_CACHE_LIMIT=209715200   # 200MB (200 * 1024 * 1024), applied when --cach
 
 # --- Defaults ---
 INSTALL_DIR="/opt/9hits"
+PRESTART="/usr/local/lib/9hits/viewer-prestart.sh"   # see install_prestart
 RESTART_DELAY=5
 DO_INSTALL_DEPS=1   # install system deps by default; --skip-install-deps to opt out
 DO_INSTALL_VNC=0
@@ -198,6 +199,14 @@ download_app() {
     echo "ERROR: Download failed." >&2; exit 1
   }
   mkdir -p "$INSTALL_DIR"
+  # A fresh install supersedes whatever the viewer had staged for its own update: a leftover handoff
+  # would otherwise be applied over this install on the next start. install.info goes too, so the
+  # update server reads the version from the binary instead of the id of the old install.
+  local d
+  for d in "$INSTALL_DIR".update-* "$INSTALL_DIR".rollback "$INSTALL_DIR".rollback-tree; do
+    [ -d "$d" ] && rm -rf "$d"
+  done
+  rm -f "$INSTALL_DIR.update-starts" "$INSTALL_DIR/install.info"
   echo "Extracting to $INSTALL_DIR ..."
   tar -xjf "$tmp_file" -C "$INSTALL_DIR" --strip-components=1
   rm -f "$tmp_file"
@@ -324,7 +333,10 @@ prepare_vnc_password() {
 # systemd merely relaunches it on the clean exit.
 # --------------------------------------------------------------------------
 build_run_flags() {
-  RUN_FLAGS=(--auto-start --in-loop --render-to-terminal)
+  # --may-update-applier=systemd: the viewer updates itself and leaves the swap to $PRESTART (see
+  # install_prestart). The `may` prefix passes the whitelist of EVERY viewer build: an older one exits on
+  # an unknown switch, and this script may well download a viewer older than itself.
+  RUN_FLAGS=(--auto-start --in-loop --render-to-terminal --may-update-applier=systemd)
   [ -n "$RESET_INTERVAL" ] && RUN_FLAGS+=("--reset-interval=$RESET_INTERVAL")
   # Must be re-passed here, not just at install time: the viewer reads it from argv on
   # every start and does not persist it, so a flag only given to the init pass would be
@@ -368,6 +380,160 @@ teardown_stack() {
   sleep 1
   rm -f "/tmp/.X${dnum}-lock" "/tmp/.X11-unix/X${dnum}" 2>/dev/null || true
   screen -wipe >/dev/null 2>&1 || true
+}
+
+# --------------------------------------------------------------------------
+# Viewer self-update. The viewer downloads and stages an update by itself, then
+# exits; its supervisor runs this script before starting it again, so the files
+# are swapped while no viewer runs: systemd here (ExecStartPre), /nh.sh in the
+# Docker image (docker/Dockerfile writes the same script with --write-prestart).
+# It lives OUTSIDE the install dir so that no update can overwrite or break it.
+# Re-running install.sh rewrites it. The file names it reads are shared with
+# the viewer: change both together.
+# --------------------------------------------------------------------------
+install_prestart() {
+  mkdir -p "$(dirname "$PRESTART")"
+  cat > "$PRESTART" << 'PRESTART_SH'
+#!/bin/bash
+# 9Hits Viewer: runs before EVERY start of the viewer (ExecStartPre of the
+# systemd unit, or the restart loop of /nh.sh in Docker), as root, after the
+# previous viewer process tree is gone. Written by install.sh.
+#
+#  1. An update the viewer staged and handed over (a work dir holding a
+#     `handoff` file): apply it with the update_helper staged in that dir.
+#  2. Count the starts since that apply. The viewer deletes the counter once
+#     it has run fine for a while.
+#  3. More than 5 starts without that: put the previous version back from
+#     <install>.previous.tar.gz and never take that update again.
+#
+# Never blocks the start: the caller ignores its exit code, and every failure
+# is only logged, leaving whatever is installed in place.
+
+INSTALL="${1%/}"
+[ -n "$INSTALL" ] || exit 0
+cd / || exit 0
+COUNTER="$INSTALL.update-starts"
+log() { echo "9hits-prestart: $*"; }
+
+# update_helper refuses to run inside a container (a guard against the viewer
+# spawning it there by mistake), so in one this script swaps the trees itself,
+# rename-only like the helper. PRESTART_IN_CONTAINER forces it, for tests.
+in_container() { [ -n "${PRESTART_IN_CONTAINER:-}" ] || [ -e /.dockerenv ] || [ -e /run/.containerenv ]; }
+
+# The tree to swap in: the staged one for a full package; for a patch, a copy
+# of the current tree with the staged files laid over it. The overlay is cp -r,
+# which writes INTO an existing file, so every hardlinked name of a replaced
+# binary gets it too; cp -a would give it a new inode and leave the other names
+# on the old binary (measured 28/10/2026, coreutils 9.1).
+swap_in() {
+  local d="$1" id kind new="$INSTALL.apply-new" old
+  id=$(sed -n 's/^ *"id": *\([0-9][0-9]*\).*/\1/p' "$d/job.json" | head -n 1)
+  kind=$(sed -n 's/^ *"kind": *"\([a-z]*\)".*/\1/p' "$d/job.json" | head -n 1)
+  if [ -z "$id" ] || [ ! -d "$d/staging" ]; then echo "bad job or no staging in $d"; return 1; fi
+  old="$INSTALL.old-$id"
+  rm -rf "$new" "$old"
+  if [ "$kind" = full ]; then
+    mv "$d/staging" "$new" || return 1
+  elif ! { cp -a "$INSTALL" "$new" && cp -r --preserve=mode,timestamps "$d/staging/." "$new/"; }; then
+    echo "could not build the patched tree"; rm -rf "$new"; return 1
+  fi
+  if ! mv "$INSTALL" "$old"; then
+    echo "could not move $INSTALL aside"
+    if [ "$kind" = full ]; then mv "$new" "$d/staging"; else rm -rf "$new"; fi
+    return 1
+  fi
+  if ! mv "$new" "$INSTALL"; then
+    echo "could not put the new tree in place"
+    mv "$old" "$INSTALL"
+    if [ "$kind" = full ]; then mv "$new" "$d/staging"; else rm -rf "$new"; fi
+    return 1
+  fi
+  [ -d "$old/exports" ] && [ ! -e "$INSTALL/exports" ] && mv "$old/exports" "$INSTALL/exports"
+  printf '{\n  "installedId": %s,\n  "appliedAt": "%s"\n}\n' "$id" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$INSTALL/install.info"
+  rm -rf "$old"
+  echo "swapped in $kind $id"
+}
+
+# 0. A power cut between the two renames of an apply leaves no install dir.
+if [ ! -d "$INSTALL" ]; then
+  old=$(ls -d "$INSTALL".old-* 2>/dev/null | sort -V | tail -n 1)
+  if [ -n "$old" ] && mv "$old" "$INSTALL"; then log "restored $old"; fi
+fi
+
+# 1. The marker goes first: an apply that crashes is not run again on every
+#    restart. The viewer sees the update did not land and retries later.
+for d in "$INSTALL".update-* "$INSTALL".rollback; do
+  [ -f "$d/handoff" ] || continue
+  rm -f "$d/handoff"
+  if [ ! -f "$d/job.json" ] || { ! in_container && [ ! -x "$d/helper/update_helper" ]; }; then
+    log "skipping $d: helper or job missing"
+    continue
+  fi
+  log "applying $d"
+  if in_container; then
+    swap_in "$d" >> "$d/update.log" 2>&1
+  else
+    "$d/helper/update_helper" --job="$d/job.json"
+  fi
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    log "applied $d"
+    case "$d" in
+      *.rollback) rm -f "$COUNTER" ;;
+      *) echo 0 > "$COUNTER" ;;
+    esac
+  else
+    log "apply failed (exit $rc), see $d/update.log"
+  fi
+  break
+done
+
+# 2. Starts since the last apply.
+[ -f "$COUNTER" ] || exit 0
+n=$(cat "$COUNTER" 2>/dev/null)
+case "$n" in ''|*[!0-9]*) n=0 ;; esac
+n=$((n + 1))
+if [ "$n" -le 5 ]; then
+  echo "$n" > "$COUNTER"
+  exit 0
+fi
+rm -f "$COUNTER"
+
+# 3. Back to the previous version.
+bad=$(sed -n 's/.*"installedId"[^0-9]*\([0-9][0-9]*\).*/\1/p' "$INSTALL/install.info" 2>/dev/null | head -n 1)
+prev=$(sed -n 's/.*"id"[^0-9]*\([0-9][0-9]*\).*/\1/p' "$INSTALL.previous.json" 2>/dev/null | head -n 1)
+archive="$INSTALL.previous.tar.gz"
+if [ -z "$bad" ] || [ -z "$prev" ] || [ "$prev" = "$bad" ] || [ ! -f "$archive" ]; then
+  log "version ${bad:-?} failed to start 5 times and no older version is kept"
+  exit 0
+fi
+log "version $bad failed to start 5 times, going back to $prev"
+tree="$INSTALL.rollback-tree"
+rm -rf "$tree"
+mkdir -p "$tree" || exit 0
+if ! tar -xzf "$archive" -C "$tree" --strip-components=1; then
+  log "cannot extract $archive"
+  rm -rf "$tree"
+  exit 0
+fi
+rm -rf "$INSTALL.bad-$bad"
+if ! mv "$INSTALL" "$INSTALL.bad-$bad"; then
+  log "cannot move $INSTALL aside"
+  rm -rf "$tree"
+  exit 0
+fi
+if ! mv "$tree" "$INSTALL"; then
+  mv "$INSTALL.bad-$bad" "$INSTALL"
+  log "cannot put the previous version in place"
+  rm -rf "$tree"
+  exit 0
+fi
+rm -rf "$INSTALL.bad-$bad"
+echo "$bad" >> "$INSTALL.update-bad"
+echo "$bad" > "$INSTALL.update-rolledback"
+log "back on version $prev"
+PRESTART_SH
+  chmod 755 "$PRESTART"
 }
 
 # --------------------------------------------------------------------------
@@ -426,7 +592,11 @@ UNIT
   # --- viewer unit: runs nhviewer DIRECTLY inside screen so the dashboard stays
   # attachable (screen -r) while systemd is the sole supervisor. systemd's
   # Restart=always relaunches on crash AND on the viewer's own scheduled clean
-  # exit (--reset-interval), so there is no restart loop to maintain here. ---
+  # exit (--reset-interval, or to install an update), so there is no restart
+  # loop to maintain here. TimeoutStartSec covers $PRESTART putting back a
+  # previous version on a slow disk; the "-" on WorkingDirectory lets
+  # $PRESTART still run when an interrupted update left no install dir. ---
+  install_prestart
   if [ -n "$screen_bin" ]; then
     exec_pre="ExecStartPre=-$screen_bin -S $SCREEN_SESSION -X quit"
     exec_start="$screen_bin -DmS $SCREEN_SESSION $INSTALL_DIR/nhviewer ${RUN_FLAGS[*]}"
@@ -447,9 +617,11 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 Environment=DISPLAY=$XVFB_DISPLAY HOME=$HOME
-WorkingDirectory=$INSTALL_DIR
+WorkingDirectory=-$INSTALL_DIR
 $exec_pre
+ExecStartPre=-$PRESTART $INSTALL_DIR
 ExecStart=$exec_start
+TimeoutStartSec=600
 Restart=always
 RestartSec=$RESTART_DELAY
 KillMode=control-group
@@ -712,5 +884,12 @@ main() {
     fi
   fi
 }
+
+# docker/Dockerfile bakes the same prestart script into the image this way.
+if [ "${1:-}" = "--write-prestart" ]; then
+  install_prestart || exit 1
+  echo "Wrote $PRESTART"
+  exit 0
+fi
 
 main "$@"
